@@ -9,14 +9,23 @@ services:
     volumes:
       - mariadb_data:/bitnami/mariadb
     environment:
+      - MARIADB_EXTRA_FLAGS=--bind-address=0.0.0.0 --max-connect-errors=10000 --max_connections=300
       - MARIADB_USER=${DB_USER}
-      - MARIADB_DATABASE=${DB_NAME}
       - MARIADB_PASSWORD=${DB_PASSWORD}
       - MARIADB_ROOT_PASSWORD=${DB_PASSWORD}
+      - MARIADB_SKIP_TEST_DB=yes
+    healthcheck:
+      test: ['CMD', '/opt/bitnami/scripts/mariadb/healthcheck.sh']
+      interval: 15s
+      timeout: 5s
+      retries: 6
 
+    networks:
+      - wordpress-network
 
   modsecurity:
     image: owasp/modsecurity-crs:nginx
+
     volumes:
       - ./proxypass.conf:/etc/nginx/conf.d/proxypass.conf
       - ./nginx.conf:/etc/nginx/templates/nginx.conf.template
@@ -24,89 +33,84 @@ services:
       - ./REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf:/etc/modsecurity.d/owasp-crs/rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
       - ./RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf:/etc/modsecurity.d/owasp-crs/rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf
       - ./crs-setup.conf:/etc/modsecurity.d/owasp-crs/crs-setup.conf
-
-
+      - /etc/letsencrypt:/etc/letsencrypt
     ports:
       - "80:80"
       - "443:443"
     environment:
       - SERVER_NAME=modsecexample.com
       - PROXY=1
+      - METRICS_ALLOW_FROM=0.0.0.0/24
+      - METRICS_DENY_FROM=192.168.0.1
       - MODSEC_AUDIT_ENGINE=On
       - MANUAL_MODE=1
 
-  site1.com:
+    depends_on:
+       - 028haoen.com
+
+    networks:
+       - wordpress-network
+
+
+  test1.com:
     image: docker.io/bitnami/wordpress-nginx:latest
     volumes:
-      - 028haoen_com_wordpress:/bitnami/wordpress
+      - wordpress-test1-com-1:/bitnami/wordpress
     environment:
       - ALLOW_EMPTY_PASSWORD=no
       - WORDPRESS_DATABASE_HOST=mariadb
       - WORDPRESS_DATABASE_PORT_NUMBER=3306
-      - WORDPRESS_DATABASE_NAME=site1
+      - WORDPRESS_DATABASE_NAME=test1
       - WORDPRESS_TABLE_PREFIX=grign_
       - WORDPRESS_DATABASE_USER=${DB_USER}
-      - WORDPRESS_DATABASE_PASSWORD=${WORDPRESS_DATABASE_PASSWORD_site1.com}
+      - WORDPRESS_DATABASE_PASSWORD=${DB_PASSWORD}
+      - WORDPRESS_DATA_TO_PERSIST=wp-config.php wp-content files icon
+      - WORDPRESS_ENABLE_REVERSE_PROXY=yes
+      - WORDPRESS_ENABLE_HTTPS=yes
     depends_on:
-      - mariadb
+      mariadb:
+        condition: service_healthy
+    extra_hosts:
+      - "test1.com:172.18.0.1"
     networks:
       - wordpress-network
 
 
-
-  site2.com:
+  test2.com:
     image: docker.io/bitnami/wordpress-nginx:latest
     volumes:
-      - 0898teyi_com_wordpress:/bitnami/wordpress
+      - wordpress-test2-com-1:/bitnami/wordpress
     environment:
       - ALLOW_EMPTY_PASSWORD=no
       - WORDPRESS_DATABASE_HOST=mariadb
       - WORDPRESS_DATABASE_PORT_NUMBER=3306
-      - WORDPRESS_DATABASE_NAME=site2
+      - WORDPRESS_DATABASE_NAME=test2
       - WORDPRESS_TABLE_PREFIX=kcfsu_
       - WORDPRESS_DATABASE_USER=${DB_USER}
-      - WORDPRESS_DATABASE_PASSWORD=${WORDPRESS_DATABASE_PASSWORD_site2.com}
+      - WORDPRESS_DATABASE_PASSWORD=${DB_PASSWORD}
+      - WORDPRESS_DATA_TO_PERSIST=wp-config.php wp-content files icon
+      - WORDPRESS_ENABLE_REVERSE_PROXY=yes
+      - WORDPRESS_ENABLE_HTTPS=yes
     depends_on:
-      - mariadb
+      mariadb:
+        condition: service_healthy
+    extra_hosts:
+      - "test2.com:172.18.0.1"
     networks:
       - wordpress-network
 
 
-
-  site3.com:
-    image: docker.io/bitnami/wordpress-nginx:latest
-    volumes:
-      - 13719030012jzm_com_wordpress:/bitnami/wordpress
-    environment:
-      - ALLOW_EMPTY_PASSWORD=no
-      - WORDPRESS_DATABASE_HOST=mariadb
-      - WORDPRESS_DATABASE_PORT_NUMBER=3306
-      - WORDPRESS_DATABASE_NAME=site3
-      - WORDPRESS_TABLE_PREFIX=twitw_
-      - WORDPRESS_DATABASE_USER=${DB_USER}
-      - WORDPRESS_DATABASE_PASSWORD=${WORDPRESS_DATABASE_PASSWORD_site3.com}
-    depends_on:
-      - mariadb
-    networks:
-      - wordpress-network
+ 
+  # Add new WordPress service after this line
 
 
-
-
-
-  volumes:
-  site1:
+volumes:
+  wordpress-test1-com-1:
     driver: local
 
-
-  site2:
+  wordpress-test2-com-1:
     driver: local
-
-
-  site3:
-    driver: local
-
-
 
   mariadb_data:
     driver: local
+

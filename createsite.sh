@@ -1,15 +1,18 @@
 #!/bin/bash
 set -a; source .env; set +a
-echo "Starting WordPress site creation on Docker and Nginx reverse proxy..."
+echo "Starting WordPress site creation using Docker and Nginx as a reverse proxy..."
 
 read -p "Enter domain name: " domain_name
 db_name=$(echo "$domain_name" | tr '.' '_')
 read -sp "Enter a password for the WordPress admin user: " wp_password
 echo
+
 echo "${db_name}_PASSWORD=$wp_password" >> .env
 
-docker compose exec mariadb mysql -u root -p"$DB_PASSWORD" -e "CREATE DATABASE $db_name; GRANT ALL PRIVILEGES ON $db_name.* TO 'dbuser'@'%' IDENTIFIED BY '$DB_PASSWORD'"
+# new db
+docker compose exec mariadb mysql -u root -p"$DB_PASSWORD" -e "CREATE DATABASE $db_name; GRANT ALL PRIVILEGES ON $db_name.* TO 'databaseuser'@'%' IDENTIFIED BY '$DB_PASSWORD'"
 
+# add new site to docker-compose.yml
 cp  docker-compose.yml docker-compose.back`date +%Y%m%d`
 wordpress_service=$(cat <<EOF
   $domain_name:
@@ -36,23 +39,26 @@ wordpress_service=$(cat <<EOF
 EOF
 )
 
-awk -v wordpress="$wordpress_service" '/# Add new WordPress service after this line/ {print; print wordpress; next}1' docker-compose.yml
+awk -v wordpress="$wordpress_service" '/# Add new WordPress service after this line/ {print; print wordpress; next}1' docker-compose.yml > docker-compose.tmp && mv docker-compose.tmp docker-compose.yml
 
 cat <<EOF >> docker-compose.yml
   wordpress-$domain_name-1:
     driver: local
 EOF
+# ssl certificate
 docker run -it --rm --name certbot \
   -v "/etc/letsencrypt:/etc/letsencrypt" \
   -v "/var/lib/letsencrypt:/var/lib/letsencrypt" \
   -v "/root/.ssh/cloudflare/cloudflare.ini:/cloudflare.ini:ro" \
   certbot/dns-cloudflare certonly --non-interactive --agree-tos \
-  --dns-cloudflare --email mail@email.com \
+  --dns-cloudflare --email gmail@gmail.com \
   --dns-cloudflare-credentials /cloudflare.ini \
   --dns-cloudflare-propagation-seconds 60 \
   -d "$domain_name" -d "www.$domain_name"
 
+echo "The SSL certificate has been generated successfully."
 
+#nginx block
 cp proxypass.conf proxypass.back`date +%Y%m%d`
 nginx_server_block=$(cat <<EOF
 
@@ -88,4 +94,5 @@ echo "Proxypass configuration updated."
 
 
 echo "The new WordPress site for $domain_name has been created successfully. Please run 'docker compose up -d' and restart modsecurity container to  apply the changes."
+
 
