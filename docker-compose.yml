@@ -46,7 +46,7 @@ services:
       - MANUAL_MODE=1
 
     depends_on:
-       - 028haoen.com
+       - test1.com
 
     networks:
        - wordpress-network
