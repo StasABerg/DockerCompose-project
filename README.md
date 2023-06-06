@@ -1,0 +1,1 @@
+Dockercompose project to create multiple wordpress containers proxied through a modsecurity container.
